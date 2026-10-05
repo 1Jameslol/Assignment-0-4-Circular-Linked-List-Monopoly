@@ -1,5 +1,6 @@
 #include <cstdlib>
 #include <ctime>
+#include <iostream>
 #include <string>
 #include <vector>
 
@@ -34,6 +35,73 @@ public:
 
     PropertyNode* getHead() const {
         return head;
+    }
+
+    void addProperty(const std::string& name, int cost) {
+        auto* node = new PropertyNode{name, cost, "Bank", nullptr, nullptr};
+        if (head == nullptr) {
+            head = node;
+            node->next = node;
+            node->prev = node;
+            return;
+        }
+
+        PropertyNode* tail = head->prev;
+        node->next = head;
+        node->prev = tail;
+        tail->next = node;
+        head->prev = node;
+    }
+
+    PropertyNode* searchProperty(const std::string& name) const {
+        if (head == nullptr) {
+            return nullptr;
+        }
+
+        PropertyNode* current = head;
+        do {
+            if (current->name == name) {
+                return current;
+            }
+            current = current->next;
+        } while (current != head);
+
+        return nullptr;
+    }
+
+    bool removeProperty(const std::string& name) {
+        PropertyNode* node = searchProperty(name);
+        if (node == nullptr) {
+            return false;
+        }
+
+        if (node->next == node) {
+            head = nullptr;
+        } else {
+            node->prev->next = node->next;
+            node->next->prev = node->prev;
+            if (node == head) {
+                head = node->next;
+            }
+        }
+
+        delete node;
+        return true;
+    }
+
+    void printProperties() const {
+        if (head == nullptr) {
+            std::cout << "The board is empty.\n";
+            return;
+        }
+
+        PropertyNode* current = head;
+        do {
+            std::cout << current->name << " ($" << current->cost
+                      << ", owner: " << current->owner << ") -> ";
+            current = current->next;
+        } while (current != head);
+        std::cout << "(back to " << head->name << ")\n";
     }
 
     std::vector<PropertyNode*> getProperties() const {
@@ -135,5 +203,21 @@ private:
 
 int main(int argc, char* argv[]) {
     std::srand(static_cast<unsigned int>(std::time(nullptr)));
+
+    MonopolyBoard listTest;
+    if (listTest.searchProperty("Go") == nullptr) {
+        std::cerr << "Linked-list search test failed.\n";
+        return 1;
+    }
+    listTest.addProperty("Temporary Test Property", 25);
+    if (listTest.searchProperty("Temporary Test Property") == nullptr ||
+        !listTest.removeProperty("Temporary Test Property") ||
+        listTest.searchProperty("Temporary Test Property") != nullptr) {
+        std::cerr << "Linked-list add/remove test failed.\n";
+        return 1;
+    }
+    std::cout << "Linked-list add/search/remove/print test passed.\nBoard traversal: ";
+    listTest.printProperties();
+
     return runMonopolyGui(argc, argv);
 }

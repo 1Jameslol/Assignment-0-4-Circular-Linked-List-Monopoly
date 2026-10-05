@@ -1,12 +1,15 @@
 #include <QApplication>
 #include <QGridLayout>
 #include <QLabel>
+#include <QPlainTextEdit>
 #include <QPushButton>
+#include <QTimer>
 #include <QVBoxLayout>
 #include <QWidget>
 
 #include <cstdlib>
 #include <algorithm>
+#include <iostream>
 #include <string>
 #include <vector>
 
@@ -16,7 +19,7 @@ public:
 //The constructor creates the window along with all of the parts attached to the gui WRITTEN WITH GPT-6 Luna
     MonopolyWindow()
         : board(), turnsCompleted(0), currentPlayerIndex(0), pendingProperty(nullptr),
-          pendingExtraRoll(false), gameOver(false) {
+          pendingExtraRoll(false), gameOver(false), autoSimulation(false) {
         players = {
             {"Player 1", 1500, board.getHead(), false},
             {"Player 2", 1500, board.getHead(), false}
@@ -96,6 +99,12 @@ public:
         moneyLabel->setStyleSheet("font-size: 13px; font-weight: bold;");
         centerLayout->addWidget(moneyLabel);
 
+        turnLog = new QPlainTextEdit(center);
+        turnLog->setReadOnly(true);
+        turnLog->setMaximumHeight(115);
+        turnLog->setPlaceholderText("Turn results will appear here.");
+        centerLayout->addWidget(turnLog);
+
         rollButton = new QPushButton("Roll Dice", center);
         centerLayout->addWidget(rollButton);
         buyButton = new QPushButton("Buy Property", center);
@@ -119,6 +128,51 @@ public:
 
         hideDecisionButtons();
         refreshBoard();
+    }
+
+    void simulateTenTurns() {
+        autoSimulation = true;
+        rollButton->setEnabled(false);
+        QStringList results;
+
+        for (int i = 0; i < 10 && !gameOver; ++i) {
+            if (currentPlayer().inJail) {
+                Player& player = currentPlayer();
+                if (player.money >= 50) {
+                    player.money -= 50;
+                    player.inJail = false;
+                    messageLabel->setText(QString("%1 paid $50 bail.")
+                        .arg(QString::fromStdString(player.name)));
+                    rollAndResolve();
+                } else {
+                    player.inJail = false;
+                    messageLabel->setText(QString("%1 served a turn in Jail.")
+                        .arg(QString::fromStdString(player.name)));
+                    finishTurn();
+                }
+            } else {
+                rollAndResolve();
+            }
+
+            const QString turnResult = QString("Turn %1: %2")
+                .arg(i + 1)
+                .arg(messageLabel->text().section('\n', 0, 0));
+            results.append(turnResult);
+            std::cout << turnResult.toStdString() << '\n';
+        }
+
+        autoSimulation = false;
+        if (!gameOver) {
+            gameOver = true;
+            rollButton->setText("Game Complete");
+            rollButton->setEnabled(false);
+        }
+
+        turnLog->setPlainText(results.join('\n'));
+        messageLabel->setText("10-turn simulation complete.\nFinal balances are shown below.");
+        refreshBoard();
+        std::cout << "Final results: Player 1: $" << players[0].money
+                  << " | Player 2: $" << players[1].money << '\n';
     }
 
 private:
@@ -198,6 +252,16 @@ private:
             if (player.money < landed->cost) {
                 messageLabel->setText(QString("%1 landed on %2 but cannot afford its $%3 price.")
                     .arg(QString::fromStdString(player.name)).arg(name).arg(landed->cost));
+                finishTurn(pendingExtraRoll);
+                return;
+            }
+
+            if (autoSimulation) {
+                board.buyProperty(player);
+                messageLabel->setText(QString("%1 bought %2 for $%3.")
+                    .arg(QString::fromStdString(player.name))
+                    .arg(name)
+                    .arg(landed->cost));
                 finishTurn(pendingExtraRoll);
                 return;
             }
@@ -416,11 +480,13 @@ private:
     PropertyNode* pendingProperty;
     bool pendingExtraRoll;
     bool gameOver;
+    bool autoSimulation;
     std::vector<QLabel*> propertyTiles;
     QLabel* turnLabel;
     QLabel* diceLabel;
     QLabel* messageLabel;
     QLabel* moneyLabel;
+    QPlainTextEdit* turnLog;
     QPushButton* rollButton;
     QPushButton* buyButton;
     QPushButton* passButton;
@@ -434,5 +500,6 @@ int runMonopolyGui(int argc, char* argv[]) {
     QApplication app(argc, argv);
     MonopolyWindow window;
     window.show();
+    QTimer::singleShot(0, &window, [&window]() { window.simulateTenTurns(); });
     return app.exec();
 }
